@@ -6,31 +6,20 @@ export default function ClearNDA() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<any>(null);
 
-  const handleFileUpload = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) return;
+ const handleFileUpload = (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!file) return;
 
-    // TEMP mock result
-    setResult({
-      overallRisk: "MEDIUM",
-      summary:
-        "This NDA is broadly standard but contains clauses that may create longer-term obligations than typical under Australian practice.",
-      clauses: [
-        {
-          name: "Confidential Information Definition",
-          risk: "MEDIUM",
-          explanation:
-            "The definition of confidential information is broad and may include information that is already public or independently developed."
-        },
-        {
-          name: "Term & Survival",
-          risk: "HIGH",
-          explanation:
-            "Confidentiality obligations apply indefinitely, which is uncommon in Australia outside of trade secrets."
-        }
-      ]
-    });
-  };
+  // TEMP: Australian placeholder NDA text until parsing is added
+  const sampleNDAText = `
+    This Non-Disclosure Agreement is made under the laws of New South Wales, Australia.
+    The receiving party agrees to keep all confidential information confidential.
+    Confidentiality obligations apply indefinitely unless otherwise agreed.
+  `;
+
+  const result = evaluateNDA(sampleNDAText);
+  setResult(result);
+};
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
