@@ -65,7 +65,7 @@ function evaluateNDA(text: string): NDAEvaluationResult {
       name: 'Restraint / Non-Compete',
       risk: 'HIGH',
       explanation:
-        'The agreement appears to include restraint-style obligations, which may be unenforceable in Australia but still costly to dispute.'
+        'The agreement appears to include restraint-style obligations, which may be unenforceable in Australia but can still be costly to dispute.'
     });
   }
 
@@ -116,9 +116,7 @@ function evaluateNDA(text: string): NDAEvaluationResult {
 ========================= */
 
 async function extractTextFromFile(file: File): Promise<string> {
-  if (file.type === 'text/plain') {
-    return await file.text();
-  }
+  if (file.type === 'text/plain') return await file.text();
 
   if (
     file.type ===
@@ -136,12 +134,7 @@ async function extractTextFromFile(file: File): Promise<string> {
   if (file.type === 'application/pdf') {
     const formData = new FormData();
     formData.append('file', file);
-
-    const res = await fetch('/api/parse-pdf', {
-      method: 'POST',
-      body: formData
-    });
-
+    const res = await fetch('/api/parse-pdf', { method: 'POST', body: formData });
     const data = await res.json();
     return data.text || '';
   }
@@ -229,13 +222,13 @@ export default function ClearNDA() {
   const downloadPDF = () => {
     if (!result) return;
     const doc = new jsPDF();
-    doc.text('ClearNDA – NDA Risk Report', 10, 10);
-    doc.text(`Overall Risk: ${result.overallRisk}`, 10, 20);
+    doc.text('ClearNDA — NDA Risk Report', 10, 12);
+    doc.text(`Overall Risk: ${result.overallRisk}`, 10, 22);
     result.clauses.forEach((c, i) => {
       doc.text(
         `${c.name} (${c.risk}): ${c.explanation}`,
         10,
-        32 + i * 12
+        36 + i * 14
       );
     });
     doc.save('clearnda-report.pdf');
@@ -248,29 +241,29 @@ export default function ClearNDA() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-900">
-      <section className="max-w-5xl mx-auto px-6 py-20">
+    <main className="min-h-screen bg-gradient-to-b from-black via-zinc-950 to-black text-zinc-100">
+      <section className="max-w-5xl mx-auto px-6 py-24">
 
         {/* HERO */}
-        <h1 className="text-4xl font-bold mb-3 tracking-tight">ClearNDA</h1>
-        <p className="text-xl mb-4 max-w-3xl">
-          Understand NDA risk before you sign.
-        </p>
-        <p className="text-gray-600 max-w-3xl mb-8">
-          Automated NDA risk review for founders, contractors, consultants and agencies.
-          Built for Australian law. Private, fast, and affordable.
+        <h1 className="text-4xl font-semibold tracking-tight mb-4">
+          ClearNDA
+        </h1>
+
+        <p className="text-lg text-zinc-300 max-w-3xl mb-6">
+          Automated NDA risk assessment for Australian founders, consultants,
+          and independent operators.
         </p>
 
-        <div className="mb-14 text-sm text-gray-500 space-y-1">
+        <div className="text-sm text-zinc-400 space-y-1 mb-14">
           <p>• Australian-focused legal risk patterns</p>
-          <p>• Files processed securely in-memory only</p>
-          <p>• Documents are never stored</p>
+          <p>• Files processed transiently — never stored</p>
+          <p>• No accounts, no retention, no tracking</p>
           <p>• Payments secured by Stripe</p>
         </div>
 
         {/* UPLOAD */}
-        <section className="mb-20">
-          <h2 className="text-2xl font-semibold mb-4">Upload your NDA</h2>
+        <section className="mb-24">
+          <h2 className="text-xl font-medium mb-4">Upload NDA</h2>
 
           <form onSubmit={handleFileUpload} className="space-y-4">
             <input
@@ -289,7 +282,7 @@ export default function ClearNDA() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800"
+                className="px-6 py-3 bg-zinc-100 text-black rounded-xl hover:bg-white"
               >
                 Upload NDA
               </button>
@@ -297,14 +290,14 @@ export default function ClearNDA() {
               <button
                 type="button"
                 onClick={runDemo}
-                className="px-6 py-3 bg-gray-200 rounded-xl hover:bg-gray-300"
+                className="px-6 py-3 bg-zinc-800 text-zinc-200 rounded-xl hover:bg-zinc-700"
               >
-                Try a sample NDA
+                Try sample NDA
               </button>
             </div>
 
             {fileName && (
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-zinc-400">
                 Selected file: <strong>{fileName}</strong>
               </p>
             )}
@@ -312,7 +305,7 @@ export default function ClearNDA() {
             <div className="pt-6">
               <button
                 type="submit"
-                className="px-6 py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-700"
+                className="px-6 py-3 bg-zinc-800 text-white rounded-xl hover:bg-zinc-700"
               >
                 Review NDA
               </button>
@@ -322,9 +315,9 @@ export default function ClearNDA() {
 
         {/* RESULTS */}
         {result && (
-          <section className="bg-white p-8 rounded-2xl shadow mb-20">
+          <section className="bg-zinc-950 border border-zinc-800 p-8 rounded-2xl mb-24">
 
-            <div className="mb-6 p-4 border border-yellow-300 bg-yellow-50 rounded-xl text-sm">
+            <div className="mb-6 p-4 border border-zinc-700 bg-zinc-900 rounded-xl text-sm text-zinc-300">
               Automated preliminary review only. Not legal advice.
             </div>
 
@@ -332,34 +325,34 @@ export default function ClearNDA() {
               <strong>Overall risk:</strong> {result.overallRisk}
             </p>
 
-            <p className="text-gray-700 mb-6">{result.summary}</p>
+            <p className="text-zinc-400 mb-6">{result.summary}</p>
 
             <button
               onClick={rerunAnalysis}
-              className="mb-8 px-4 py-2 bg-gray-100 rounded-xl text-sm"
+              className="mb-8 px-4 py-2 bg-zinc-800 rounded-xl text-sm"
             >
               Re-run analysis
             </button>
 
             {hasPaid && (
-              <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-xl text-sm">
-                ✅ Full report unlocked. You can download your PDF or escalate to a lawyer.
+              <div className="mb-8 p-4 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-zinc-300">
+                Full report unlocked.
               </div>
             )}
 
             {result.clauses.length > 0 && (
               <>
-                <h3 className="text-xl font-semibold mb-4">Clause breakdown</h3>
+                <h3 className="text-lg font-medium mb-4">Clause analysis</h3>
                 <ul className="space-y-4">
                   {result.clauses.map((clause, idx) => (
-                    <li key={idx} className="border p-4 rounded-xl">
-                      <p className="font-semibold mb-1">
+                    <li key={idx} className="border border-zinc-800 p-4 rounded-xl">
+                      <p className="font-medium mb-1">
                         {clause.name} — {clause.risk}
                       </p>
                       {hasPaid ? (
-                        <p className="text-sm text-gray-700">{clause.explanation}</p>
+                        <p className="text-sm text-zinc-300">{clause.explanation}</p>
                       ) : (
-                        <p className="text-sm text-gray-400 blur-sm select-none">
+                        <p className="text-sm text-zinc-600 blur-sm select-none">
                           {clause.explanation}
                         </p>
                       )}
@@ -373,7 +366,7 @@ export default function ClearNDA() {
               {!hasPaid && (
                 <button
                   onClick={startCheckout}
-                  className="px-6 py-3 bg-indigo-600 text-white rounded-xl"
+                  className="px-6 py-3 bg-white text-black rounded-xl"
                 >
                   Unlock full report — ${PRICE_AUD} AUD
                 </button>
@@ -383,9 +376,9 @@ export default function ClearNDA() {
                 <>
                   <button
                     onClick={downloadPDF}
-                    className="px-6 py-3 bg-gray-800 text-white rounded-xl"
+                    className="px-6 py-3 bg-zinc-100 text-black rounded-xl"
                   >
-                    Download PDF report
+                    Download PDF
                   </button>
 
                   {result.overallRisk === 'HIGH' && (
@@ -396,11 +389,11 @@ export default function ClearNDA() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify(result)
                         });
-                        alert('Request sent. A lawyer may contact you.');
+                        alert('Request sent.');
                       }}
-                      className="px-6 py-3 bg-gray-100 rounded-xl"
+                      className="px-6 py-3 bg-zinc-800 rounded-xl"
                     >
-                      Escalate to a lawyer
+                      Escalate to lawyer
                     </button>
                   )}
                 </>
@@ -409,9 +402,9 @@ export default function ClearNDA() {
           </section>
         )}
 
-        <footer className="border-t pt-6 text-sm text-gray-500">
+        <footer className="border-t border-zinc-800 pt-8 text-sm text-zinc-500">
           <p>ClearNDA is a product of Interstice Architecture (ABN 42 406 151 083)</p>
-          <p>Privacy-first • No document storage • Australia-focused</p>
+          <p>Privacy-first • No document storage • Australian focus</p>
         </footer>
 
       </section>
