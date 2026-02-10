@@ -2,7 +2,9 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import mammoth from 'mammoth';
+import { jsPDF } from 'jspdf';
 
 /* =========================
    Types
@@ -24,14 +26,12 @@ type NDAEvaluationResult = {
 
 /* =========================
    Deterministic NDA Engine
-   (Australia-first)
 ========================= */
 
 function evaluateNDA(text: string): NDAEvaluationResult {
   const clauses: NDAClauseResult[] = [];
   const lowerText = text.toLowerCase();
 
-  // Confidential information definition
   if (lowerText.includes('confidential information')) {
     clauses.push({
       name: 'Confidential Information Definition',
@@ -41,7 +41,6 @@ function evaluateNDA(text: string): NDAEvaluationResult {
     });
   }
 
-  // Indefinite / perpetual obligations
   if (
     lowerText.includes('indefinite') ||
     lowerText.includes('perpetual') ||
@@ -55,7 +54,6 @@ function evaluateNDA(text: string): NDAEvaluationResult {
     });
   }
 
-  // Restraint / non-compete
   if (
     lowerText.includes('restraint of trade') ||
     lowerText.includes('non-compete') ||
@@ -69,7 +67,6 @@ function evaluateNDA(text: string): NDAEvaluationResult {
     });
   }
 
-  // Governing law (Australia)
   if (
     lowerText.includes('laws of australia') ||
     lowerText.includes('laws of new south wales')
@@ -82,7 +79,6 @@ function evaluateNDA(text: string): NDAEvaluationResult {
     });
   }
 
-  // Executed as a deed
   if (lowerText.includes('executed as a deed')) {
     clauses.push({
       name: 'Executed as a Deed',
@@ -92,7 +88,6 @@ function evaluateNDA(text: string): NDAEvaluationResult {
     });
   }
 
-  // Injunctive relief
   if (lowerText.includes('injunctive relief')) {
     clauses.push({
       name: 'Injunctive Relief',
@@ -123,73 +118,153 @@ async function extractTextFromFile(file: File): Promise<string> {
     return await file.text();
   }
 
-  if (file.type === 'application/pdf') {
-    const pdfjsLib = await import('pdfjs-dist');
-    const buffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-
-    let text = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      text += content.items.map((item: any) => item.str).join(' ');
+  if (
+    file.type ===
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ) {
+    try {
+      const buffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+      return result.value || '';
+    } catch {
+      return '';
     }
-    return text;
+  }
+
+  if (file.type === 'application/pdf') {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch('/api/parse-pdf', {
+      method: 'POST',
+      body: formData
+    });
+
+    const data = await res.json();
+    return data.text || '';
   }
 
   return '';
 }
 
 /* =========================
+   Demo NDA
+========================= */
+
+const DEMO_HIGH_RISK_NDA = `
+The Receiving Party agrees to keep all Confidential Information confidential
+in perpetuity.
+
+This agreement includes a restraint of trade and non-compete obligations.
+
+The Receiving Party acknowledges that injunctive relief may be sought without
+proof of loss.
+
+This Agreement is executed as a deed and governed by the laws of New South Wales.
+`;
+
+/* =========================
    Page Component
 ========================= */
 
 export default function ClearNDA() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<NDAEvaluationResult | null>(null);
+  const [lastText, setLastText] = useState<string | null>(null);
+  const [hasPaid, setHasPaid] = useState(false);
+
+  /* Persist result */
+  useEffect(() => {
+    const saved = localStorage.getItem('clearnda:lastResult');
+    if (saved) setResult(JSON.parse(saved));
+  }, []);
+
+  useEffect(() => {
+    if (result) {
+      localStorage.setItem('clearnda:lastResult', JSON.stringify(result));
+    }
+  }, [result]);
+
+  /* Handle payment return */
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('paid') === 'true') {
+        setHasPaid(true);
+      }
+    }
+  }, []);
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
 
     const text = await extractTextFromFile(file);
+    setLastText(text);
 
     if (!text || text.length < 50) {
       setResult({
         overallRisk: 'MEDIUM',
         summary:
-          'We could not confidently extract readable text from this document. Please upload a text-based PDF or Word document.',
+          'We could not confidently extract readable text from this document. Please upload a text-based NDA.',
         clauses: []
       });
       return;
     }
 
-    const evaluation = evaluateNDA(text);
-    setResult(evaluation);
+    setResult(evaluateNDA(text));
+  };
+
+  const runDemo = () => {
+    setFile(null);
+    setFileName('Demo: High-Risk NDA');
+    setLastText(DEMO_HIGH_RISK_NDA);
+    setResult(evaluateNDA(DEMO_HIGH_RISK_NDA));
+  };
+
+  const rerunAnalysis = () => {
+    if (!lastText) return;
+    setResult(evaluateNDA(lastText));
+  };
+
+  const downloadPDF = () => {
+    if (!result) return;
+    const doc = new jsPDF();
+    doc.text('ClearNDA Report', 10, 10);
+    doc.text(`Overall Risk: ${result.overallRisk}`, 10, 20);
+    result.clauses.forEach((c, i) => {
+      doc.text(
+        `${c.name} (${c.risk}): ${c.explanation}`,
+        10,
+        30 + i * 10
+      );
+    });
+    doc.save('clearnda-report.pdf');
+  };
+
+  const startCheckout = async () => {
+    const res = await fetch('/api/create-checkout-session', {
+      method: 'POST'
+    });
+    const data = await res.json();
+    window.location.href = data.url;
   };
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
       <section className="max-w-5xl mx-auto px-6 py-20">
 
-        {/* HERO */}
         <h1 className="text-4xl font-bold mb-4">ClearNDA</h1>
         <p className="text-xl mb-10">
-          Understand your NDA — faster, cheaper, safer.<br />
+          Understand your NDA — faster, cheaper, safer.
+          <br />
           <span className="text-gray-600">
             Built for Australian law. Ready for the world.
           </span>
         </p>
-
-        {/* WHY */}
-        <section className="mb-16">
-          <h2 className="text-2xl font-semibold mb-3">Why ClearNDA Exists</h2>
-          <p className="text-gray-700">
-            NDAs are common, often misunderstood, and frequently overpaid for.
-            ClearNDA helps Australians understand key risks before signing.
-          </p>
-        </section>
 
         {/* UPLOAD */}
         <section className="mb-20">
@@ -197,9 +272,9 @@ export default function ClearNDA() {
 
           <form onSubmit={handleFileUpload} className="space-y-4">
             <input
-              id="nda-upload"
+              ref={fileInputRef}
               type="file"
-              accept=".pdf,.txt"
+              accept=".txt,.docx,.pdf"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0] || null;
@@ -208,12 +283,21 @@ export default function ClearNDA() {
               }}
             />
 
-            <label
-              htmlFor="nda-upload"
-              className="inline-block px-6 py-3 bg-black text-white rounded-xl cursor-pointer hover:bg-gray-800"
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800"
             >
               Upload NDA
-            </label>
+            </button>
+
+            <button
+              type="button"
+              onClick={runDemo}
+              className="ml-4 px-6 py-3 bg-gray-200 text-gray-900 rounded-xl hover:bg-gray-300"
+            >
+              Try a sample NDA (High Risk)
+            </button>
 
             {fileName && (
               <p className="text-sm text-gray-600">
@@ -221,12 +305,14 @@ export default function ClearNDA() {
               </p>
             )}
 
-            <button
-              type="submit"
-              className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700"
-            >
-              Review NDA
-            </button>
+            <div className="pt-8">
+              <button
+                type="submit"
+                className="px-6 py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-700"
+              >
+                Review NDA
+              </button>
+            </div>
           </form>
         </section>
 
@@ -234,38 +320,86 @@ export default function ClearNDA() {
         {result && (
           <section className="bg-white p-6 rounded-2xl shadow mb-20">
 
-            {/* PRELIMINARY NOTICE */}
             <div className="mb-6 p-4 border border-yellow-300 bg-yellow-50 rounded-xl text-sm text-yellow-800">
               <strong>Preliminary Review Notice:</strong> This is an automated,
-              high-level assessment based on common Australian NDA patterns.
-              It is not legal advice.
+              high-level assessment. It is not legal advice.
             </div>
 
-            <h2 className="text-2xl font-semibold mb-2">Review Summary</h2>
             <p className="mb-2">
               <strong>Overall Risk:</strong> {result.overallRisk}
             </p>
+
             <p className="mb-6">{result.summary}</p>
 
-            <h3 className="text-xl font-semibold mb-3">Clause Breakdown</h3>
-            <ul className="space-y-4">
-              {result.clauses.map((clause, idx) => (
-                <li key={idx} className="border p-4 rounded-xl">
-                  <p className="font-semibold">
-                    {clause.name} — {clause.risk}
-                  </p>
-                  <p className="text-sm text-gray-700">
-                    {clause.explanation}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <button
+              onClick={rerunAnalysis}
+              className="mb-6 px-4 py-2 bg-gray-100 rounded-xl"
+            >
+              Re-run analysis
+            </button>
+
+            {result.clauses.length > 0 && (
+              <>
+                <h3 className="text-xl font-semibold mb-3">Clause Breakdown</h3>
+                <ul className="space-y-4">
+                  {result.clauses.map((clause, idx) => (
+                    <li key={idx} className="border p-4 rounded-xl">
+                      <p className="font-semibold">
+                        {clause.name} — {clause.risk}
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        {clause.explanation}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            <div className="mt-8 flex gap-4">
+              {!hasPaid && (
+                <button
+                  onClick={startCheckout}
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-xl"
+                >
+                  Unlock PDF + Lawyer Review
+                </button>
+              )}
+
+              {hasPaid && (
+                <>
+                  <button
+                    onClick={downloadPDF}
+                    className="px-6 py-3 bg-gray-800 text-white rounded-xl"
+                  >
+                    Download PDF report
+                  </button>
+
+                  {result.overallRisk === 'HIGH' && (
+                    <button
+                      onClick={async () => {
+                        await fetch('/api/lawyer-intake', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(result)
+                        });
+                        alert('Sent to lawyer');
+                      }}
+                      className="px-6 py-3 bg-gray-100 rounded-xl"
+                    >
+                      Escalate to lawyer
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </section>
         )}
 
-        {/* FOOTER */}
         <footer className="border-t pt-6 text-sm text-gray-500">
-          <p>ClearNDA is a product of Interstice Architecture (ABN 42 406 151 083)</p>
+          <p>
+            ClearNDA is a product of Interstice Architecture (ABN 42 406 151 083)
+          </p>
           <p>Contact: tim@intersticearchitecture.com</p>
         </footer>
 
