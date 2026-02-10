@@ -132,3 +132,98 @@ export default function ClearNDA() {
     </main>
   );
 }
+type NDARiskLevel = "LOW" | "MEDIUM" | "HIGH";
+
+type NDAClauseResult = {
+  name: string;
+  risk: NDARiskLevel;
+  explanation: string;
+};
+
+type NDAEvaluationResult = {
+  overallRisk: NDARiskLevel;
+  summary: string;
+  clauses: NDAClauseResult[];
+};
+
+/**
+ * Deterministic NDA risk evaluation (Australia-first).
+ * 
+ * IMPORTANT:
+ * - Not wired into UI yet
+ * - No AI
+ * - No side effects
+ * - Pure function
+ */
+function evaluateNDA(text: string): NDAEvaluationResult {
+  const clauses: NDAClauseResult[] = [];
+
+  const lowerText = text.toLowerCase();
+
+  // Confidential information definition (broad check)
+  if (lowerText.includes("confidential information")) {
+    clauses.push({
+      name: "Confidential Information Definition",
+      risk: "MEDIUM",
+      explanation:
+        "The definition of confidential information appears broad. Broad definitions can create uncertainty about what information is protected."
+    });
+  }
+
+  // Perpetual or indefinite term
+  if (
+    lowerText.includes("perpetual") ||
+    lowerText.includes("indefinite") ||
+    lowerText.includes("in perpetuity")
+  ) {
+    clauses.push({
+      name: "Term & Survival",
+      risk: "HIGH",
+      explanation:
+        "Confidentiality obligations appear to apply indefinitely. In Australia, perpetual confidentiality is uncommon outside of trade secrets."
+    });
+  }
+
+  // Non-compete / restraint language
+  if (
+    lowerText.includes("non-compete") ||
+    lowerText.includes("non compete") ||
+    lowerText.includes("restraint of trade")
+  ) {
+    clauses.push({
+      name: "Restraint / Non-Compete",
+      risk: "HIGH",
+      explanation:
+        "The NDA appears to include restraint-style obligations. Such clauses may be unenforceable in Australia but can still be costly to dispute."
+    });
+  }
+
+  // Governing law outside Australia
+  if (
+    lowerText.includes("governed by the laws of") &&
+    !lowerText.includes("australia")
+  ) {
+    clauses.push({
+      name: "Governing Law",
+      risk: "MEDIUM",
+      explanation:
+        "The NDA appears to be governed by non-Australian law, which can increase cost and complexity for Australian parties."
+    });
+  }
+
+  // Overall risk calculation
+  let overallRisk: NDARiskLevel = "LOW";
+
+  if (clauses.some((c) => c.risk === "HIGH")) {
+    overallRisk = "HIGH";
+  } else if (clauses.length >= 2) {
+    overallRisk = "MEDIUM";
+  }
+
+  return {
+    overallRisk,
+    summary:
+      "This assessment is based on common NDA risk patterns using Australian legal principles. Some clauses may warrant closer review.",
+    clauses
+  };
+}
