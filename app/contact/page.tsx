@@ -1,100 +1,103 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export default function ContactPage() {
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>(
-    'idle'
-  );
+  const params = useSearchParams();
+  const success = params.get('success') === 'true';
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setStatus('sending');
+    setLoading(true);
+    setError(null);
 
     const form = e.currentTarget;
-    const data = {
-      name: (form.elements.namedItem('name') as HTMLInputElement).value,
-      email: (form.elements.namedItem('email') as HTMLInputElement).value,
-      message: (form.elements.namedItem('message') as HTMLTextAreaElement).value
+    const formData = new FormData(form);
+
+    const payload = {
+      name: formData.get('name'),
+      email: formData.get('email'),
+      message: formData.get('message')
     };
 
-    try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+    const res = await fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
 
-      if (!res.ok) throw new Error();
-      setStatus('sent');
-      form.reset();
-    } catch {
-      setStatus('error');
+    const data = await res.json();
+
+    if (data.success) {
+      window.location.href = '/contact?success=true';
+    } else {
+      setError(data.error || 'Something went wrong.');
+      setLoading(false);
     }
   };
 
   return (
     <main className="min-h-screen bg-black text-white">
       <section className="max-w-3xl mx-auto px-6 py-24">
-        <h1 className="text-3xl font-semibold mb-4">Contact</h1>
 
-        <p className="text-gray-400 mb-10">
-          Questions, issues, or legal follow-ups related to your NDA review.
-        </p>
+        <h1 className="text-3xl font-semibold mb-6 tracking-tight">
+          Contact
+        </h1>
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6 bg-neutral-900 p-8 rounded-2xl border border-neutral-800"
-        >
-          <div>
-            <label className="block text-sm mb-1 text-gray-300">Name</label>
-            <input
-              name="name"
-              required
-              className="w-full rounded-lg bg-black border border-neutral-700 px-4 py-3 text-white focus:outline-none focus:border-gray-500"
-            />
+        {success && (
+          <div className="mb-8 p-4 rounded-xl bg-green-900/30 text-green-200">
+            Thanks — your message has been sent.
           </div>
+        )}
 
-          <div>
-            <label className="block text-sm mb-1 text-gray-300">Email</label>
-            <input
-              name="email"
-              type="email"
-              required
-              className="w-full rounded-lg bg-black border border-neutral-700 px-4 py-3 text-white focus:outline-none focus:border-gray-500"
-            />
-          </div>
+        {!success && (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm mb-1">Name</label>
+              <input
+                name="name"
+                required
+                className="w-full px-4 py-3 rounded-xl bg-gray-900 border border-gray-700"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm mb-1 text-gray-300">Message</label>
-            <textarea
-              name="message"
-              required
-              rows={5}
-              className="w-full rounded-lg bg-black border border-neutral-700 px-4 py-3 text-white focus:outline-none focus:border-gray-500"
-            />
-          </div>
+            <div>
+              <label className="block text-sm mb-1">Email</label>
+              <input
+                name="email"
+                type="email"
+                required
+                className="w-full px-4 py-3 rounded-xl bg-gray-900 border border-gray-700"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={status === 'sending'}
-            className="px-6 py-3 rounded-xl bg-white text-black font-medium hover:bg-gray-200 disabled:opacity-50"
-          >
-            {status === 'sending' ? 'Sending…' : 'Send message'}
-          </button>
+            <div>
+              <label className="block text-sm mb-1">Message</label>
+              <textarea
+                name="message"
+                rows={5}
+                required
+                className="w-full px-4 py-3 rounded-xl bg-gray-900 border border-gray-700"
+              />
+            </div>
 
-          {status === 'sent' && (
-            <p className="text-green-400 text-sm">
-              Message sent. We’ll get back to you.
-            </p>
-          )}
+            {error && (
+              <p className="text-red-400 text-sm">{error}</p>
+            )}
 
-          {status === 'error' && (
-            <p className="text-red-400 text-sm">
-              Something went wrong. Please try again.
-            </p>
-          )}
-        </form>
+            <button
+              disabled={loading}
+              className="px-6 py-3 rounded-xl bg-white text-black font-medium hover:bg-gray-200 disabled:opacity-50"
+            >
+              {loading ? 'Sending…' : 'Send message'}
+            </button>
+          </form>
+        )}
+
       </section>
     </main>
   );
