@@ -1,14 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect } from 'react';
+
 
 export default function ContactPage() {
-  const params = useSearchParams();
-  const success = params.get('success') === 'true';
-
+ const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+useEffect(() => {
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    setSuccess(params.get('success') === 'true');
+  }
+}, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
